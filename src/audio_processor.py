@@ -355,7 +355,19 @@ class AudioProcessor:
             return False
         
         try:
-            # Normalize and convert to 16-bit integers
+            # Handle different audio shapes
+            if len(audio_data.shape) > 1:
+                # If stereo or multi-channel, take first channel
+                audio_data = audio_data[:, 0] if audio_data.shape[1] > 0 else audio_data.flatten()
+            
+            # Ensure audio is 1D
+            audio_data = audio_data.flatten()
+            
+            # Normalize audio to prevent clipping
+            if np.max(np.abs(audio_data)) > 0:
+                audio_data = audio_data / np.max(np.abs(audio_data)) * 0.95
+            
+            # Convert to 16-bit integers
             audio_int16 = (audio_data * 32767).astype(np.int16)
             
             # Create temporary WAV file
@@ -363,14 +375,22 @@ class AudioProcessor:
                 wavfile.write(temp_file.name, sample_rate, audio_int16)
                 temp_path = temp_file.name
             
+            # Reinitialize pygame mixer with correct settings
+            try:
+                pygame.mixer.quit()
+                pygame.mixer.init(frequency=sample_rate, size=-16, channels=1, buffer=1024)
+            except:
+                pygame.mixer.init(frequency=22050, size=-16, channels=1, buffer=1024)
+            
             # Play using pygame
             pygame.mixer.music.load(temp_path)
             pygame.mixer.music.play()
             
-            logger.info("Audio playback started")
+            logger.info("Audio playback started successfully")
             
-            # Clean up temporary file after a delay
-            # Note: In a real application, you'd want better temp file management
+            # Wait a moment for playback to start
+            import time
+            time.sleep(0.1)
             
             return True
             

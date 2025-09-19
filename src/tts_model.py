@@ -173,18 +173,73 @@ class TTSModelManager:
     
     def _synthesize_speecht5(self, text: str, speaker_id: Optional[int] = None) -> Optional[np.ndarray]:
         """Synthesize speech using SpeechT5 model."""
-        # Tokenize input text
-        inputs = self.processor(text=text, return_tensors="pt")
-        input_ids = inputs["input_ids"].to(self.device)
-        
-        # Use speaker embeddings
-        speaker_emb = self.speaker_embeddings.to(self.device)
-        
-        # Generate speech
-        with torch.no_grad():
-            speech = self.model.generate_speech(input_ids, speaker_emb, vocoder=None)
-        
-        return speech.cpu().numpy()
+        try:
+            # Process text in smaller chunks for better quality
+            if len(text) > 200:
+                # Split into sentences for better audio quality
+                sentences = text.replace('!', '.').replace('?', '.').split('.')
+                sentences = [s.strip() for s in sentences if s.strip()]
+                
+                audio_chunks = []
+                for sentence in sentences:
+                    if len(sentence) > 5:  # Skip very short segments
+                        chunk_audio = self._synthesize_single_chunk(sentence)
+                        if chunk_audio is not None:
+                            audio_chunks.append(chunk_audio)
+                
+                if audio_chunks:
+                    # Add small pause between sentences
+                    pause_samples = np.zeros(int(0.3 * 16000))  # 0.3 second pause
+                    result = audio_chunks[0]
+                    for chunk in audio_chunks[1:]:
+                        result = np.concatenate([result, pause_samples, chunk])
+                    return result
+            
+            return self._synthesize_single_chunk(text)
+            
+        except Exception as e:
+            logger.error(f"SpeechT5 synthesis failed: {e}")
+            return None
+    
+    def _synthesize_single_chunk(self, text: str) -> Optional[np.ndarray]:
+        """Synthesize a single chunk of text."""
+        try:
+            # Tokenize input text
+            inputs = self.processor(text=text, return_tensors="pt")
+            input_ids = inputs["input_ids"].to(self.device)
+            
+            # Use speaker embeddings - ensure correct shape
+            speaker_emb = self.speaker_embeddings.to(self.device)
+            
+            # Ensure speaker embedding has correct shape and select first speaker
+            if len(speaker_emb.shape) > 1:
+                speaker_emb = speaker_emb[0:1]  # Take first speaker embedding
+            else:
+                speaker_emb = speaker_emb.unsqueeze(0)
+            
+            # Generate speech
+            with torch.no_grad():
+                speech = self.model.generate_speech(input_ids, speaker_emb, vocoder=None)
+            
+            result = speech.cpu().numpy()
+            
+            # Ensure result is 1D and properly shaped
+            if len(result.shape) > 1:
+                result = result.flatten()
+            
+            # Add slight fade in/out for smoother audio
+            if len(result) > 1000:
+                fade_samples = min(500, len(result) // 10)
+                fade_in = np.linspace(0, 1, fade_samples)
+                fade_out = np.linspace(1, 0, fade_samples)
+                result[:fade_samples] *= fade_in
+                result[-fade_samples:] *= fade_out
+            
+            return result
+            
+        except Exception as e:
+            logger.warning(f"Single chunk synthesis failed: {e}")
+            return None
     
     def _synthesize_vits(self, text: str) -> Optional[np.ndarray]:
         """Synthesize speech using VITS model."""
