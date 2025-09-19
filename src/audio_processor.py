@@ -1,5 +1,18 @@
 """
-Audio Processing Module
+Audio Processilogging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Optional pygame import for audio playback
+PYGAME_AVAILABLE = False
+pygame = None
+
+try:
+    import pygame
+    PYGAME_AVAILABLE = True
+    logger.debug("Pygame imported successfully")
+except ImportError as e:
+    PYGAME_AVAILABLE = False
+    logger.warning(f"Pygame not available: {e}. Audio playback will be limited.")
 
 This module handles audio output, file saving, format conversion, 
 and playback functionality for the text-to-audio system.
@@ -12,10 +25,13 @@ from scipy import signal
 from scipy.io import wavfile
 import os
 import tempfile
-from typing import Optional, Union, List, Tuple, Dict, Any
+from typing import Optional, Union, List, Tuple, Dict, Any, TYPE_CHECKING
 from pathlib import Path
 import logging
 from datetime import datetime
+
+if TYPE_CHECKING:
+    import pygame
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

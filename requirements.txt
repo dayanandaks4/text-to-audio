@@ -19,6 +19,7 @@ phonemizer>=3.2.1
 # Audio processing
 pydub>=0.25.1
 pyaudio>=0.2.11
+pygame>=2.5.0
 
 # Hugging Face specific
 accelerate>=0.20.0
